@@ -15,7 +15,8 @@
     {
       "source": "/svc/api/:path*",
       "destination": {
-        "service": "backend"
+        "service": "backend",
+        "path": "/:path*"
       }
     },
     {
