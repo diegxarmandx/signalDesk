@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 
-from fastapi import FastAPI 
+from fastapi import FastAPI, APIRouter
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -40,6 +40,8 @@ app = FastAPI(
     version="0.1.0"
 )
 
+router = APIRouter()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -48,21 +50,21 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
-@app.get("/")
+@router.get("/")
 def root():
     return {
         "message": "SignalDesk API is running"
     }
 
 
-@app.get("/health")
+@router.get("/health")
 def health_check():
     return {
         "status": "ok",
         "service": "signaldesk-api"
     }
 
-@app.post("/tickets", response_model=TicketResponse, status_code=201)
+@router.post("/tickets", response_model=TicketResponse, status_code=201)
 def create_ticket(ticket: TicketCreate, db: Session = Depends(get_db),):
     classification = classify_ticket(
     ticket.title,
@@ -81,14 +83,14 @@ def create_ticket(ticket: TicketCreate, db: Session = Depends(get_db),):
     db.refresh(db_ticket) # refresh the instance with the data from the database, including the generated ID and timestamps
     return db_ticket
 
-@app.get("/tickets", response_model=list[TicketResponse])
+@router.get("/tickets", response_model=list[TicketResponse])
 def get_tickets(db: Session = Depends(get_db)):
     statement = select(Ticket)
     result = db.execute(statement)
     tickets = result.scalars().all()
     return tickets
 
-@app.patch("/tickets/{ticket_id}", response_model=TicketResponse)
+@router.patch("/tickets/{ticket_id}", response_model=TicketResponse)
 def update_ticket(ticket_id: int, ticket: TicketUpdate, db: Session = Depends(get_db)):
     db_ticket = db.get(Ticket, ticket_id)
     if not db_ticket:
@@ -99,7 +101,7 @@ def update_ticket(ticket_id: int, ticket: TicketUpdate, db: Session = Depends(ge
     db.refresh(db_ticket)
     return db_ticket
 
-@app.delete("/tickets/{ticket_id}")
+@router.delete("/tickets/{ticket_id}")
 def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     db_ticket = db.get(Ticket, ticket_id)
     if not db_ticket:
@@ -108,3 +110,10 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     db.delete(db_ticket)
     db.commit()
     return {"detail": "Ticket deleted successfully"}
+
+
+# Register the same API routes twice:
+# - without a prefix for local development
+# - under /svc/api for the Vercel production URL
+app.include_router(router)
+app.include_router(router, prefix="/svc/api")
